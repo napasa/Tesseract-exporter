@@ -1,0 +1,8 @@
+#define MEMORY_NAME         "${MEMORY}"
+#define IN_PATH_NAME       "${IN_PATH}"
+#define OUT_PATH_NAME      "${OUT_PATH}"
+#define PAGE_RANGE_NAME    "${PAGE_RANGE}"
+#define TESS_DATA_NAME     "${TESS_DATA}"
+#define PROGRESS_INFO_NAME "${PROGRESS_INFO}"
+#define TESS_LANG          "${TESS_LANG}"
+
