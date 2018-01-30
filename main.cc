@@ -1,9 +1,6 @@
 #include "Tessocr.hh"
 #include <QApplication>
-#ifdef DEBUG
 #include <iostream>
-#include <fstream>
-#endif
 #include "Config.h"
 
 int main(int argc, char *argv[])
@@ -16,10 +13,8 @@ int main(int argc, char *argv[])
     MyString *tessDataParentDir= segment.find<MyString>(TESS_DATA_NAME).first;
     MyString *tessLang = segment.find<MyString>(TESS_LANG).first;
     ProgressInfo *interProgressInfo = segment.find<ProgressInfo>(PROGRESS_INFO_NAME).first;
+    PdfPostProcess *pdfPostProcess = segment.find<PdfPostProcess>(PDF_POST_PROCESS).first;
 
-    std::cerr<<intPath->c_str()<<std::endl;
-    if (!std::ifstream(intPath->c_str()))
-        std::cerr<<"file not exists"<<std::endl;
 
     if(intPath == nullptr || outPath==nullptr || pageRange==nullptr || tessDataParentDir==nullptr || interProgressInfo==nullptr){
         std::cerr << "From TessOcr: pdfPath or pageRange is nullptr"<<std::endl;
@@ -31,7 +26,7 @@ int main(int argc, char *argv[])
         pageRangeLst.push_back(index);
     }
     QApplication   app(argc, argv);
-    PdfOcrParam pdfOcrParam("", tessLang->c_str(), pageRangeLst);
+    PdfOcrParam pdfOcrParam("", tessLang->c_str(), pageRangeLst, *pdfPostProcess);
     TessOcr tessOcr(tessDataParentDir->data());
 #ifdef DEBUG
     std::cerr <<"From TessOcr: filePath"<< intPath->c_str()<<" "<<outPath<<std::endl;

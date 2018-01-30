@@ -4,13 +4,40 @@
 #include <thread>
 #include <string>
 #include <fstream>
+#ifdef WIN32
+#include <windows.h>
+#endif
 #include "Config.h"
 #include "Interprocess.hh"
+
+#ifdef WIN32
+std::wstring AnsiToUtf16(const std::string &ansiString)
+{
+    int nCharacters = MultiByteToWideChar(CP_ACP, MB_COMPOSITE, ansiString.c_str(), ansiString.length(), nullptr, 0);
+    std::wstring utf16_str(nCharacters, '\0');
+    MultiByteToWideChar(CP_ACP, MB_COMPOSITE, ansiString.c_str(), ansiString.length(), &utf16_str[0], nCharacters);
+    return utf16_str;
+}
+
+std::string Utf16ToUtf8(const std::wstring &utf16)
+{
+    int utf8_size = WideCharToMultiByte(CP_UTF8, 0, utf16.c_str(),
+        utf16.length(), nullptr, 0,
+        nullptr, nullptr);
+    std::string utf8_str;
+    utf8_str.resize(utf8_size, '\0');
+    WideCharToMultiByte(CP_UTF8, 0, utf16.c_str(),
+        utf16.length(), &utf8_str[0], utf8_size,
+        nullptr, nullptr);
+    return utf8_str;
+}
+#endif
 
 class TessWrapper{
 public:
     TessWrapper():m_inPath(nullptr), m_outPath(nullptr),
-        m_pageRange(nullptr), m_tessDataParentDir(nullptr), m_progressInfo(nullptr){}
+        m_pageRange(nullptr), m_tessDataParentDir(nullptr), m_progressInfo(nullptr),
+        m_tessLang(nullptr), m_pdfPostProcess(nullptr){}
 
     void InitInterProcessSpace(){
         shared_memory_object::remove(MEMORY_NAME);
@@ -22,6 +49,7 @@ public:
         m_tessDataParentDir = m_segment.construct<MyString>(TESS_DATA_NAME)(alloc_inst);
         m_progressInfo = m_segment.construct<ProgressInfo>(PROGRESS_INFO_NAME)(false, 0);
         m_tessLang = m_segment.construct<MyString>(TESS_LANG)(alloc_inst);
+        m_pdfPostProcess = m_segment.construct<PdfPostProcess>(PDF_POST_PROCESS)(100, -1, true, 1);
     }
     void DestroyInterProcessSpace(){
         m_segment.destroy<MyString>(IN_PATH_NAME);
@@ -30,12 +58,14 @@ public:
         m_segment.destroy<MyString>(TESS_DATA_NAME);
         m_segment.destroy<ProgressInfo>(PROGRESS_INFO_NAME);
         m_segment.destroy<MyString>(TESS_LANG);
+        m_segment.destroy<PdfPostProcess>(PDF_POST_PROCESS);
         shared_memory_object::remove(MEMORY_NAME);
     }
-    void SetCommonData(string tessPath, string tessDataParentDir, string tessLang){
+    void SetCommonData(string tessPath, string tessDataParentDir, string tessLang, const PdfPostProcess &pdfPostProcess){
         m_tessPath = tessPath;
         *m_tessDataParentDir = tessDataParentDir.c_str();
         *m_tessLang = tessLang.c_str();
+        *m_pdfPostProcess=pdfPostProcess;
     }
     void SetTess(string inPath, string outPath, int start, int end){
         *m_inPath = inPath.c_str();
@@ -92,114 +122,22 @@ private:
     MyString *m_tessDataParentDir;
     ProgressInfo *m_progressInfo;
     MyString *m_tessLang;
+    PdfPostProcess *m_pdfPostProcess;
     string m_tessPath;
 };
 
-#define TESS_PATH "./EndProcess"
-#define TESS_DATA "/home/yu/build-gImageReader-Imported_Kit-Debug/share/"
-#define TESS_LANG "eng"
-
-int RunTess(string inPath, string outPath, int start, int end, string tessPath, string tessDataDir, string tessLang){
+int RunTess(string inPath, string outPath, int start, int end,
+            string tessPath, string tessDataDir, string tessLang, const PdfPostProcess &pdfPostProcess){
     TessWrapper tessWrapper;
     tessWrapper.InitInterProcessSpace();
-    tessWrapper.SetCommonData(tessPath, tessDataDir, tessLang);
+    tessWrapper.SetCommonData(tessPath, tessDataDir, tessLang, pdfPostProcess);
     tessWrapper.SetTess(inPath, outPath, start, end);
     return tessWrapper.RunTess();
 }
 
-#ifdef WINDOWS
-enum Encode
-{
-    ANSI = 1,
-    UNICODE_LE,
-    UNICODE_BE,
-    UTF8,
-    UTF8_NOBOM
-};
-bool CheckUnicodeWithoutBOM(const char *pText, long length)
-{
-    int i;
-    int nBytes = 0;
-    char chr;
-
-    bool bAllAscii = true;
-    for (i = 0; i < length; i++)
-    {
-        chr = *(pText + i);
-        if ((chr & 0x80) != 0)
-            bAllAscii = false;
-        if (nBytes == 0)
-        {
-            if (chr >= 0x80)
-            {
-                if (chr >= 0xFC && chr <= 0xFD)
-                    nBytes = 6;
-                else if (chr >= 0xF8)
-                    nBytes = 5;
-                else if (chr >= 0xF0)
-                    nBytes = 4;
-                else if (chr >= 0xE0)
-                    nBytes = 3;
-                else if (chr >= 0xC0)
-                    nBytes = 2;
-                else
-                {
-                    return false;
-                }
-                nBytes--;
-            }
-        }
-        else
-        {
-            if ((chr & 0xC0) != 0x80)
-            {
-                return false;
-            }
-            nBytes--;
-        }
-    }
-    if (nBytes > 0)
-    {
-        return false;
-    }
-    if (bAllAscii)
-    {
-        return false;
-    }
-    return true;
-}
-Encode DetectEncode(const char *pBuffer, long length)
-{
-    if (length < 2)
-    {
-        return Encode::ANSI;
-    }
-
-    if (pBuffer[0] == 0xFF && pBuffer[1] == 0xFE)
-    {
-        return Encode::UNICODE_LE;
-    }
-    else if (pBuffer[0] == 0xFE && pBuffer[1] == 0xFF)
-    {
-        return Encode::UNICODE_BE;
-    }
-    else if (pBuffer[0] == 0xEF && pBuffer[1] == 0xBB && pBuffer[2] == 0xBF)
-    {
-        return Encode::UTF8;
-    }
-    else if (CheckUnicodeWithoutBOM(pBuffer, length))
-    {
-        return Encode::UTF8_NOBOM;
-    }
-    else
-    {
-        return Encode::ANSI;
-    }
-}
-#endif
-
 int main(int argc, char *argv[])
 {
+
     if(argc==1){
         std::cout<<"Usage: FrontUI inPath outPath start end config"<<std::endl;
         std::cout<<"outPath ext:pdf,txt,xml"<<std::endl;
@@ -213,16 +151,26 @@ int main(int argc, char *argv[])
         std::cerr <<"Unable to open config file. your config path:"<<configPath<<std::endl;
         return 2;
     }
-    auto inPath = argv[1];
-    auto outPath = argv[2];
+#ifdef WIN32
+    string inPath = Utf16ToUtf8(AnsiToUtf16(argv[1])).c_str();
+    string outPath = Utf16ToUtf8(AnsiToUtf16(argv[2])).c_str();
+#else
+    string inPath = argv[1];
+    string outPath = argv[2];
+#endif
     auto start = std::stoi(argv[3]);
     auto end = std::stoi(argv[4]);
     std::vector<std::string> config;
-    config.resize(3);
+    config.resize(7);
     int i=0;
-    while (i<3 && std::getline(ifs, config[i++], ' ')) {}
+    while (i<7 && std::getline(ifs, config[i++], ' ')) {}
     auto tessPath = config[0];
     auto tessDataDir = config[1];
     auto tessLang = config[2];
-    return RunTess(inPath, outPath, start, end, tessPath.c_str(), tessDataDir.c_str(), tessLang.c_str());
+    auto fontScale = std::stoi(config[3]);
+    auto fontSize = std::stoi(config[4]);
+    auto uniformziLineSpacing =bool(std::stoi(config[5]));
+    auto preserveSpaceWidth=std::stoi(config[6]);
+    PdfPostProcess pdfPostProcess(fontScale, fontSize, uniformziLineSpacing, preserveSpaceWidth);
+    return RunTess(inPath, outPath, start, end, tessPath.c_str(), tessDataDir.c_str(), tessLang.c_str(), pdfPostProcess);
 }

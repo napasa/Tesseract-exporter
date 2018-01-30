@@ -20,10 +20,12 @@ struct PageData {
 
 class PdfOcrParam{
 public:
-    PdfOcrParam(const QString &password, const QString &lang, const QList<int> &pages);
+    PdfOcrParam(const QString &password, const QString &lang,
+                const QList<int> &pages, const PdfPostProcess &pdfPostProcess);
     QString m_password;
     QString m_lang;
     QList<int> m_pages;
+    PdfPostProcess m_pdfPostProcess;
 };
 
 
@@ -80,7 +82,7 @@ public:
         TXT
     };
 public:
-    TessOcr(const QString &parentOfTessdataDir):m_parentOfTessdataDir(parentOfTessdataDir){}
+    TessOcr(const QString &parentOfTessdataDir);
     int OcrPdf(const QString &infile, const PdfOcrParam &pdfOcrParam, ProgressInfo *interProcessInfo);
     int ExportPdf(const QString& outname, ProgressInfo *interProcessInfo);
     int ExporteXML(const QString& outname, ProgressInfo *interProcessInfo);
@@ -93,11 +95,13 @@ private:
     QPageSize GetPdfPageSize(const HOCRDocument *hocrdocument);
     void PrintChildren(PDFPainter& painter, const HOCRItem* item, const PDFSettings& pdfSettings, double imgScale);
     int ExportResult(const QString& outname, ProgressInfo *interProgressInfo);
+    PDFSettings &GetPdfSettings();
 private:
     HOCRDocument m_hocrDocument;
     QString m_parentOfTessdataDir;
     QString m_utf8Text;
     OUTFILE_TYPE m_outfileType;
+    PDFSettings m_pdfSettings;
 };
 
 #endif // TESSOCR_H

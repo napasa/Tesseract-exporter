@@ -5,4 +5,4 @@
 #define TESS_DATA_NAME     "${TESS_DATA}"
 #define PROGRESS_INFO_NAME "${PROGRESS_INFO}"
 #define TESS_LANG          "${TESS_LANG}"
-
+#define PDF_POST_PROCESS   "${PDF_POST_PROCESS}"

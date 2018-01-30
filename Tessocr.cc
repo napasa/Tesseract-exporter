@@ -13,8 +13,8 @@
 #include "Render.hh"
 
 
-PdfOcrParam::PdfOcrParam(const QString &password, const QString &lang, const QList<int> &pages)
-    :m_lang(lang), m_pages(pages){
+PdfOcrParam::PdfOcrParam(const QString &password, const QString &lang, const QList<int> &pages, const PdfPostProcess &pdfPostProcess)
+    :m_lang(lang), m_pages(pages), m_pdfPostProcess(pdfPostProcess){
 }
 
 struct ReadSessionData {
@@ -47,6 +47,23 @@ QRectF GetSceneBoundingRect(QPixmap pixmap){
     return transform.mapRect(rect);
 }
 
+TessOcr::TessOcr(const QString &parentOfTessdataDir)
+:m_parentOfTessdataDir(parentOfTessdataDir){
+    PDFSettings pdfSettings;
+    pdfSettings.colorFormat = QImage::Format_RGB888 ;
+    pdfSettings.conversionFlags = Qt::AutoColor;
+    pdfSettings.compression = PDFSettings::Compression::CompressJpeg;
+    pdfSettings.compressionQuality = 90;
+    pdfSettings.fontFamily = "";
+    pdfSettings.fontSize = -1;
+    pdfSettings.uniformizeLineSpacing = true;
+    pdfSettings.preserveSpaceWidth = 1;
+    pdfSettings.overlay = false;
+    pdfSettings.detectedFontScaling = 100/ 100.;
+    m_pdfSettings = pdfSettings;
+}
+
+
 QImage GetImage(const QRectF& rect, QPixmap pixmap) {
     QImage image(rect.width(), rect.height(), QImage::Format_RGB32);
     image.fill(Qt::black);
@@ -78,21 +95,6 @@ QPageSize TessOcr::GetPdfPageSize(const HOCRDocument*hocrdocument){
     return QPageSize(QSize(pageWidth, pageHeight), "custom",QPageSize::ExactMatch);
 }
 
-PDFSettings GetPdfSettings() {
-    PDFSettings pdfSettings;
-    pdfSettings.colorFormat = QImage::Format_RGB888 ;
-    pdfSettings.conversionFlags = Qt::AutoColor;
-    pdfSettings.compression = PDFSettings::Compression::CompressJpeg;
-    pdfSettings.compressionQuality = 90;
-    pdfSettings.fontFamily = "";
-    pdfSettings.fontSize = -1;
-    pdfSettings.uniformizeLineSpacing = true;
-    pdfSettings.preserveSpaceWidth = 1;
-    pdfSettings.overlay = false;
-    pdfSettings.detectedFontScaling = 100/ 100.;
-    return pdfSettings;
-}
-
 void TessOcr::ProcessPdf(const char *hocrtext, PageData pageData){
     QDomDocument doc;
     doc.setContent(QString::fromUtf8(hocrtext));
@@ -107,6 +109,11 @@ void TessOcr::ProcessPdf(const char *hocrtext, PageData pageData){
     m_hocrDocument.addPage(pageDiv, true);
 }
 
+PDFSettings &TessOcr::GetPdfSettings(){
+    return m_pdfSettings;
+}
+
+int sourceDpi;
 void TessOcr::PrintChildren(PDFPainter& painter, const HOCRItem* item, const PDFSettings& pdfSettings, double imgScale) {
     if(!item->isEnabled()) {
         return;
@@ -132,7 +139,8 @@ void TessOcr::PrintChildren(PDFPainter& painter, const HOCRItem* item, const PDF
                     painter.setFontFamily(wordItem->fontFamily(), wordItem->fontBold(), wordItem->fontItalic());
                 }
                 if(pdfSettings.fontSize == -1) {
-                    painter.setFontSize(wordItem->fontSize() * pdfSettings.detectedFontScaling);
+                    double realPointSize = 72*wordRect.height()/sourceDpi;
+                    painter.setFontSize(realPointSize * pdfSettings.detectedFontScaling);
                 }
                 // If distance from previous word is large, keep the space
                 if(wordRect.x() - prevWordRight > pdfSettings.preserveSpaceWidth * painter.getAverageCharWidth()) {
@@ -154,7 +162,8 @@ void TessOcr::PrintChildren(PDFPainter& painter, const HOCRItem* item, const PDF
                 painter.setFontFamily(wordItem->fontFamily(), wordItem->fontBold(), wordItem->fontItalic());
             }
             if(pdfSettings.fontSize == -1) {
-                painter.setFontSize(wordItem->fontSize() * pdfSettings.detectedFontScaling);
+                double realPointSize = 72*wordRect.height()/sourceDpi;
+                painter.setFontSize(realPointSize * pdfSettings.detectedFontScaling);
             }
             painter.drawText(wordRect.x(), y, wordItem->text());
         }
@@ -202,7 +211,7 @@ int TessOcr::ExportPdf(const QString& outname, ProgressInfo *interProcessInfo)
         const HOCRPage* page = m_hocrDocument.page(i);
         if(page->isEnabled()) {
             QRect bbox = page->bbox();
-            int sourceDpi = page->resolution();
+            sourceDpi = page->resolution();
             int outputDpi = 300;
             double imgScale = double(outputDpi) / sourceDpi;
             PrintChildren(pdfPrinter, page, pdfSettings, imgScale);
@@ -242,6 +251,14 @@ int TessOcr::OcrPdf(const QString &infile, const PdfOcrParam &pdfOcrParam, Progr
     }
     delete document;
 
+    m_pdfSettings.detectedFontScaling = pdfOcrParam.m_pdfPostProcess.m_fontScale/100.0;
+    m_pdfSettings.fontSize = pdfOcrParam.m_pdfPostProcess.m_fontSize;//defalut:-1;
+    m_pdfSettings.uniformizeLineSpacing = pdfOcrParam.m_pdfPostProcess.m_uniformziLineSpacing;
+    m_pdfSettings.preserveSpaceWidth = pdfOcrParam.m_pdfPostProcess.m_preserveSpaceWidth;
+#ifdef DEBUG
+    std::cerr<< "detectedFontScaling: " << m_pdfSettings.detectedFontScaling<<std::endl;
+#endif
+
     tesseract::TessBaseAPI tess;
     if(tess.Init(m_parentOfTessdataDir.toStdString().c_str(), pdfOcrParam.m_lang.toLatin1().data())==-1){
         interProcessInfo->m_errCode=5;
@@ -267,7 +284,6 @@ int TessOcr::OcrPdf(const QString &infile, const PdfOcrParam &pdfOcrParam, Progr
             if(!monitor.Cancelled()){
                 char *text=nullptr;
                 if(m_outfileType == OUTFILE_TYPE::TXT){
-                    //tess.SetVariable("hocr_font_info", "false");
                     text = tess.GetUTF8Text();
                     m_utf8Text.append(text);
                 }

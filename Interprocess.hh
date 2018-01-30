@@ -20,4 +20,16 @@ public:
 typedef allocator<char, managed_shared_memory::segment_manager>  ShmemAllocator;
 typedef basic_string<char, std::char_traits<char>, ShmemAllocator> MyString;
 typedef std::pair<int, int> PageRange;
+struct PdfPostProcess{
+public:
+    PdfPostProcess(int fontScale, int fontSize, bool uniformziLineSpacing, int preserveSpaceWidth)
+        : m_fontScale(fontScale), m_fontSize(fontSize), m_uniformziLineSpacing(uniformziLineSpacing)
+    ,m_preserveSpaceWidth(preserveSpaceWidth){
+
+    }
+    int m_fontScale;/*0~100*/
+    int m_fontSize;
+    bool m_uniformziLineSpacing;
+    int m_preserveSpaceWidth;
+};
 #endif // INTERPROCESS_HH
