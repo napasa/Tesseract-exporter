@@ -7,7 +7,7 @@ int main(int argc, char *argv[])
 {
     //Open the managed segment
     managed_shared_memory segment(open_only, MEMORY_NAME);
-    MyString *intPath = segment.find<MyString>(IN_PATH_NAME).first;
+    MyString *inPath = segment.find<MyString>(IN_PATH_NAME).first;
     MyString *outPath = segment.find<MyString>(OUT_PATH_NAME).first;
     PageRange *pageRange = segment.find<PageRange>(PAGE_RANGE_NAME).first;
     MyString *tessDataParentDir= segment.find<MyString>(TESS_DATA_NAME).first;
@@ -16,9 +16,9 @@ int main(int argc, char *argv[])
     PdfPostProcess *pdfPostProcess = segment.find<PdfPostProcess>(PDF_POST_PROCESS).first;
 
 
-    if(intPath == nullptr || outPath==nullptr || pageRange==nullptr || tessDataParentDir==nullptr || interProgressInfo==nullptr){
-        std::cerr << "From TessOcr: pdfPath or pageRange is nullptr"<<std::endl;
-        return -1;
+    if(inPath == nullptr || outPath==nullptr || pageRange==nullptr || tessDataParentDir==nullptr || interProgressInfo==nullptr){
+        std::cerr << "Fail to open share memory."<<std::endl;
+        return ERROR_CODE::FAIL_FIND_SHARE_MEMORY;
     }
 
     QList<int> pageRangeLst;
@@ -26,15 +26,27 @@ int main(int argc, char *argv[])
         pageRangeLst.push_back(index);
     }
     QApplication   app(argc, argv);
-    PdfOcrParam pdfOcrParam("", tessLang->c_str(), pageRangeLst, *pdfPostProcess);
+    OcrParam ocrParam("",tessLang->c_str(), pageRangeLst, *pdfPostProcess);
     TessOcr tessOcr(tessDataParentDir->data());
-#ifdef DEBUG
-    std::cerr <<"From TessOcr: filePath"<< intPath->c_str()<<" "<<outPath<<std::endl;
-#endif
-    QString suffix = QFileInfo(outPath->c_str()).suffix().toLower();
-    tessOcr.SetOutfileType(suffix=="pdf"?TessOcr::PDF:(suffix=="txt"?TessOcr::TXT : TessOcr::XML));
-    int result = tessOcr.OcrPdf(intPath->c_str(), pdfOcrParam, interProgressInfo);
-    if(!result){
+
+    QString outPathSuffix = QFileInfo(outPath->c_str()).suffix().toLower();
+    QString inPathSuffix = QFileInfo(inPath->c_str()).suffix().toLower();
+
+    tessOcr.SetInfileType(inPathSuffix=="pdf"?TessOcr::PDF:(inPathSuffix=="xml"?TessOcr::XML:TessOcr::IMG));
+    tessOcr.SetOutfileType(outPathSuffix=="pdf"?TessOcr::PDF:(outPathSuffix=="txt"?TessOcr::TXT : TessOcr::XML));
+    ERROR_CODE result;
+    switch (tessOcr.GetInfileType()) {
+    case TessOcr::PDF:
+    case TessOcr::IMG:
+        result = tessOcr.Ocr(inPath->c_str(), ocrParam, interProgressInfo);
+        break;
+    default:
+        result = tessOcr.ParseXML(inPath->c_str(), interProgressInfo);
+        break;
+    }
+
+
+    if(result==ERROR_CODE::SUCCESS){
         switch (tessOcr.GetOutfileType()) {
         case TessOcr::PDF:
             return tessOcr.ExportPdf(outPath->c_str(), interProgressInfo);

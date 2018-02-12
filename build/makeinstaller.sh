@@ -1,5 +1,9 @@
 #!/bin/sh
-
+#echo "Start Check tesseract"
+#dnf info --installed tesseract
+#pkg-config --modversion tesseract
+#vi /usr/x86_64-w64-mingw32/sys-root/mingw/include/tesseract/baseapi.h
+#exit
 arch=${1:-i686}
 
 if [ "$arch" == "i686" ]; then

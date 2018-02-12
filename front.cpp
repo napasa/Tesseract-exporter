@@ -37,7 +37,7 @@ class TessWrapper{
 public:
     TessWrapper():m_inPath(nullptr), m_outPath(nullptr),
         m_pageRange(nullptr), m_tessDataParentDir(nullptr), m_progressInfo(nullptr),
-        m_tessLang(nullptr), m_pdfPostProcess(nullptr){}
+        m_tessLang(nullptr), m_pdfPostProcess(nullptr),m_sencods(1){}
 
     void InitInterProcessSpace(){
         shared_memory_object::remove(MEMORY_NAME);
@@ -47,7 +47,7 @@ public:
         m_outPath = m_segment.construct<MyString>(OUT_PATH_NAME)(alloc_inst);
         m_pageRange = m_segment.construct<PageRange>(PAGE_RANGE_NAME)(0, 0);
         m_tessDataParentDir = m_segment.construct<MyString>(TESS_DATA_NAME)(alloc_inst);
-        m_progressInfo = m_segment.construct<ProgressInfo>(PROGRESS_INFO_NAME)(false, 0);
+        m_progressInfo = m_segment.construct<ProgressInfo>(PROGRESS_INFO_NAME)(0);
         m_tessLang = m_segment.construct<MyString>(TESS_LANG)(alloc_inst);
         m_pdfPostProcess = m_segment.construct<PdfPostProcess>(PDF_POST_PROCESS)(100, -1, true, 1);
     }
@@ -73,43 +73,41 @@ public:
         m_pageRange->first = start;
         m_pageRange->second = end;
     }
-    virtual bool ResultCallback(string inPath, string outPath, const ProgressInfo *progressInfo){
-        if (progressInfo->m_errCode==-1)
-        {
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-            std::cout << "In:" << inPath<<", Out:" << outPath <<", Progress:"<<progressInfo->m_progress << std::endl;
-        }
-        return progressInfo->m_cancle;
+    void SetCallbackInterval(int seconds){
+        m_sencods=seconds;
     }
-    int RunTess(){
+    int CallbackInterval(){ return m_sencods;}
+    virtual void ResultCallback(string inPath, string outPath, const ProgressInfo *progressInfo){
+          std::cout << "In:" << inPath<<", Out:" << outPath
+                    <<", Progress:"<<progressInfo->m_progress
+                   <<", Error Code: " <<progressInfo->m_errCode<<std::endl;
+    }
+    ERROR_CODE RunTess(){
+#ifndef DEBUG
         std::thread systemCmd([](string cmd){
             if (0 != std::system(cmd.c_str()))
                 return 1;
             return 0;
         }, m_tessPath);
         systemCmd.detach();
+#endif
         do
         {
+            std::this_thread::sleep_for(std::chrono::seconds(m_sencods));
             ResultCallback(m_inPath->c_str(), m_outPath->c_str(), m_progressInfo);
-        } while (m_progressInfo->m_progress != 100 && !m_progressInfo->m_cancle && m_progressInfo->m_errCode == -1);
+        } while (m_progressInfo->m_progress != 100 && m_progressInfo->m_errCode == ERROR_CODE::PROCESSING_FILE);
 #ifdef DEBUG
         if(m_progressInfo->m_progress==100){
-            std::cerr<<"OCR ended by success. OutPath is"<<m_outPath->c_str()<<std::endl;
-        }
-        else if(m_progressInfo->m_cancle){
-            std::cerr<<"OCR ended by cancled by User"<<std::endl;
+            std::cerr<<"OCR ended by success. OutPath is "<<m_outPath->c_str()<<std::endl;
         }
         else{
             std::cerr<< "OCR ended by error code which is "<<m_progressInfo->m_errCode<<std::endl;
         }
 #endif
-        return 0;
+        return m_progressInfo->m_errCode;
     }
     void StopTess(){
-        if (m_progressInfo!=nullptr)
-        {
-            m_progressInfo->m_cancle = true;
-        }
+            m_progressInfo->m_errCode = ERROR_CODE::CANCLED_BY_USER;
     }
     ~TessWrapper(){
         DestroyInterProcessSpace();
@@ -124,6 +122,7 @@ private:
     MyString *m_tessLang;
     PdfPostProcess *m_pdfPostProcess;
     string m_tessPath;
+    int m_sencods;
 };
 
 int RunTess(string inPath, string outPath, int start, int end,
@@ -141,7 +140,7 @@ int main(int argc, char *argv[])
     if(argc==1){
         std::cout<<"Usage: FrontUI inPath outPath start end config"<<std::endl;
         std::cout<<"outPath ext:pdf,txt,xml"<<std::endl;
-        return 0;
+        return ERROR_CODE::SUCCESS;
     }
 
     //config
@@ -149,7 +148,7 @@ int main(int argc, char *argv[])
     std::ifstream ifs(configPath);
     if(!ifs){
         std::cerr <<"Unable to open config file. your config path:"<<configPath<<std::endl;
-        return 2;
+        return ERROR_CODE::NOT_LOAD_FILE;
     }
 #ifdef WIN32
     string inPath = Utf16ToUtf8(AnsiToUtf16(argv[1])).c_str();

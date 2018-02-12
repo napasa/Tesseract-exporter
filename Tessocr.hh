@@ -18,9 +18,10 @@ struct PageData {
     QList<QImage> ocrAreas;
 };
 
-class PdfOcrParam{
+class OcrParam{
 public:
-    PdfOcrParam(const QString &password, const QString &lang,
+    OcrParam(){}
+    OcrParam(const QString &password, const QString &lang,
                 const QList<int> &pages, const PdfPostProcess &pdfPostProcess);
     QString m_password;
     QString m_lang;
@@ -63,7 +64,7 @@ public:
         return monitor->Cancelled();
     }
     bool Cancelled(){
-        return m_interProcessInfo->m_cancle;
+        return m_interProcessInfo->m_errCode==ERROR_CODE::CANCLED_BY_USER;
     }
 private:
     ProgressInfo *m_interProcessInfo;
@@ -76,31 +77,39 @@ public slots:
 class TessOcr
 {
 public:
-    enum OUTFILE_TYPE{
+    enum FILE_TYPE{
         PDF,
         XML,
-        TXT
+        TXT,
+        IMG
     };
 public:
     TessOcr(const QString &parentOfTessdataDir);
-    int OcrPdf(const QString &infile, const PdfOcrParam &pdfOcrParam, ProgressInfo *interProcessInfo);
-    int ExportPdf(const QString& outname, ProgressInfo *interProcessInfo);
-    int ExporteXML(const QString& outname, ProgressInfo *interProcessInfo);
-    int ExportTxt(const QString& outname, ProgressInfo *interProcessInfo);
-    void SetOutfileType(OUTFILE_TYPE outfileType){ m_outfileType = outfileType;}
-    OUTFILE_TYPE GetOutfileType(){ return m_outfileType;}
+    ERROR_CODE Ocr(const QString &inPath, const OcrParam &pdfOcrParam, ProgressInfo *interProcessInfo);
+    ERROR_CODE ParseXML(const QString &inPath, ProgressInfo *interProcessInfo);
+
+    ERROR_CODE ExportPdf(const QString& outPath, ProgressInfo *interProcessInfo);
+    ERROR_CODE ExporteXML(const QString& outPath, ProgressInfo *interProcessInfo);
+    ERROR_CODE ExportTxt(const QString& outPath, ProgressInfo *interProcessInfo);
+
+    void SetOutfileType(FILE_TYPE outfileType){ m_outfileType = outfileType;}
+    FILE_TYPE GetOutfileType(){ return m_outfileType;}
+    void SetInfileType(FILE_TYPE infileType){m_infileType = infileType;}
+    FILE_TYPE GetInfileType(){ return m_infileType;}
 private:
     QList<QImage> GetOCRAreas(const QFileInfo &fileinfo, int resolution, int page);
     void ProcessPdf(const char *hocrtext, PageData pageData);
     QPageSize GetPdfPageSize(const HOCRDocument *hocrdocument);
     void PrintChildren(PDFPainter& painter, const HOCRItem* item, const PDFSettings& pdfSettings, double imgScale);
-    int ExportResult(const QString& outname, ProgressInfo *interProgressInfo);
+    ERROR_CODE ExportResult(const QString& outPath, ProgressInfo *interProgressInfo);
     PDFSettings &GetPdfSettings();
+    ERROR_CODE CheckFileStatus(const QFileInfo &fileInfo, ProgressInfo *interProcessInfo, const OcrParam &pdfOcrParam=OcrParam());
 private:
     HOCRDocument m_hocrDocument;
     QString m_parentOfTessdataDir;
     QString m_utf8Text;
-    OUTFILE_TYPE m_outfileType;
+    FILE_TYPE m_outfileType;
+    FILE_TYPE m_infileType;
     PDFSettings m_pdfSettings;
 };
 
