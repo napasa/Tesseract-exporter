@@ -5,6 +5,7 @@
 
 int main(int argc, char *argv[])
 {
+    QApplication   app(argc, argv);
     //Open the managed segment
     managed_shared_memory segment(open_only, MEMORY_NAME);
     MyString *inPath = segment.find<MyString>(IN_PATH_NAME).first;
@@ -25,7 +26,6 @@ int main(int argc, char *argv[])
     for(int index = pageRange->first; index<=pageRange->second; index++){
         pageRangeLst.push_back(index);
     }
-    QApplication   app(argc, argv);
     OcrParam ocrParam("",tessLang->c_str(), pageRangeLst, *pdfPostProcess);
     TessOcr tessOcr(tessDataParentDir->data());
 

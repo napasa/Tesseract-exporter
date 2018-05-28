@@ -2,7 +2,7 @@ CMAKE_MINIMUM_REQUIRED(VERSION 2.8.11)
 SET(ENV{LC_ALL} "C")
 
 # Project propertyies
-PROJECT(ImageReader)
+PROJECT(TesseractExporter)
 
 # Definitions
 SET(CMAKE_CXX_STANDARD 11)

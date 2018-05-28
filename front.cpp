@@ -137,6 +137,7 @@ int RunTess(string inPath, string outPath, int start, int end,
 int main(int argc, char *argv[])
 {
 
+
     if(argc==1){
         std::cout<<"Usage: FrontUI inPath outPath start end config"<<std::endl;
         std::cout<<"outPath ext:pdf,txt,xml"<<std::endl;

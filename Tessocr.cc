@@ -30,13 +30,6 @@ struct ReadSessionData {
 };
 
 
-
-ReadSessionData *initRead(tesseract::TessBaseAPI &tess)
-{
-    tess.SetPageSegMode(tesseract::PSM_AUTO_ONLY);
-    return new ReadSessionData;
-}
-
 QRectF GetSceneBoundingRect(QPixmap pixmap){
     // We cannot use m_imageItem->sceneBoundingRect() since its pixmap
     // can currently be downscaled and therefore have slightly different
@@ -51,6 +44,9 @@ QRectF GetSceneBoundingRect(QPixmap pixmap){
 
 TessOcr::TessOcr(const QString &parentOfTessdataDir)
     :m_parentOfTessdataDir(parentOfTessdataDir){
+
+
+    //complete tess data dir
     PDFSettings pdfSettings;
     pdfSettings.colorFormat = QImage::Format_RGB888 ;
     pdfSettings.conversionFlags = Qt::AutoColor;
@@ -344,10 +340,10 @@ ERROR_CODE TessOcr::Ocr(const QString &inPath, const OcrParam &pdfOcrParam, Prog
     int angle =0;
     int progress =0;
     if(!inPath.compare("pdf", Qt::CaseInsensitive)){
-        resolution = 100;
+        resolution = 300;
     }
     else{
-        resolution = 300;
+        resolution = 100;
     }
 
     //font setting
@@ -356,12 +352,16 @@ ERROR_CODE TessOcr::Ocr(const QString &inPath, const OcrParam &pdfOcrParam, Prog
     m_pdfSettings.uniformizeLineSpacing = pdfOcrParam.m_pdfPostProcess.m_uniformziLineSpacing;
     m_pdfSettings.preserveSpaceWidth = pdfOcrParam.m_pdfPostProcess.m_preserveSpaceWidth;
 
+    std::string tessdataDir = m_parentOfTessdataDir.toStdString();
+    std::string lang = pdfOcrParam.m_lang.toStdString();
+    tesseract::OcrEngineMode mode = tesseract::OcrEngineMode::OEM_LSTM_ONLY;
     tesseract::TessBaseAPI tess;
-    if(tess.Init(m_parentOfTessdataDir.toStdString().c_str(), pdfOcrParam.m_lang.toLatin1().data())==-1){
+    if(tess.Init(tessdataDir.c_str(), lang.c_str(), mode)==-1){
         interProcessInfo->m_errCode=ERROR_CODE::FAIL_INIT_TESS;
         return ERROR_CODE::FAIL_INIT_TESS;
     }
-    initRead(tess);
+    tess.SetPageSegMode(tesseract::PSM_AUTO_ONLY);
+
     ProgressMonitor monitor(pdfOcrParam.m_pages.size(), interProcessInfo);
     monitor.desc.ocr_alive =1;
     for(int page : pdfOcrParam.m_pages){
@@ -373,7 +373,7 @@ ERROR_CODE TessOcr::Ocr(const QString &inPath, const OcrParam &pdfOcrParam, Prog
         pageData.angle = angle;
         pageData.resolution=resolution;
         pageData.ocrAreas = GetOCRAreas(fileInfo, pageData.resolution, pageData.page);
-        //add evert pdf pages to document
+
         for(const QImage &image : pageData.ocrAreas){
             tess.SetImage(image.bits(), image.width(), image.height(), 4, image.bytesPerLine());
             tess.SetSourceResolution(pageData.resolution);
