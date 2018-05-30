@@ -85,7 +85,7 @@ public:
     };
 public:
     TessOcr(const QString &parentOfTessdataDir);
-    ERROR_CODE Ocr(const QString &inPath, const OcrParam &pdfOcrParam, ProgressInfo *interProcessInfo);
+    ERROR_CODE recognize(const QString &inPath, const OcrParam &pdfOcrParam, bool autodetectLayout, ProgressInfo *interProcessInfo);
     ERROR_CODE ParseXML(const QString &inPath, ProgressInfo *interProcessInfo);
 
     ERROR_CODE ExportPdf(const QString& outPath, ProgressInfo *interProcessInfo);
@@ -98,19 +98,24 @@ public:
     FILE_TYPE GetInfileType(){ return m_infileType;}
 private:
     QList<QImage> GetOCRAreas(const QFileInfo &fileinfo, int resolution, int page);
-    void ProcessPdf(const char *hocrtext, PageData pageData);
+    void read(const char *hocrtext, PageData pageData);
     QPageSize GetPdfPageSize(const HOCRDocument *hocrdocument);
-    void PrintChildren(PDFPainter& painter, const HOCRItem* item, const PDFSettings& pdfSettings, double imgScale);
     ERROR_CODE ExportResult(const QString& outPath, ProgressInfo *interProgressInfo);
     PDFSettings &GetPdfSettings();
     ERROR_CODE CheckFileStatus(const QFileInfo &fileInfo, ProgressInfo *interProcessInfo, const OcrParam &pdfOcrParam=OcrParam());
 private:
+    void printChildren(PDFPainter& painter, const HOCRItem* item, const PDFSettings& pdfSettings, double px2pu, double imgScale = 1.);
+    PDFSettings getPdfSettings() const;
+    PageData setPage(int page, bool autodetectLayout, QString filename);
+
     HOCRDocument m_hocrDocument;
     QString m_parentOfTessdataDir;
     QString m_utf8Text;
     FILE_TYPE m_outfileType;
     FILE_TYPE m_infileType;
     PDFSettings m_pdfSettings;
+
+    PageData m_pageData;
 };
 
 #endif // TESSOCR_H

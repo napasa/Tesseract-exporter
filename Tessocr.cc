@@ -15,7 +15,7 @@
 #include "Render.hh"
 
 OcrParam::OcrParam(const QString &password, const QString &lang,
-                         const QList<int> &pages, const PdfPostProcess &pdfPostProcess)
+                   const QList<int> &pages, const PdfPostProcess &pdfPostProcess)
     :m_password(password), m_lang(lang), m_pages(pages), m_pdfPostProcess(pdfPostProcess){
 }
 
@@ -101,7 +101,7 @@ QPageSize TessOcr::GetPdfPageSize(const HOCRDocument*hocrdocument){
     return QPageSize(QSize(pageWidth, pageHeight), "custom",QPageSize::ExactMatch);
 }
 
-void TessOcr::ProcessPdf(const char *hocrtext, PageData pageData){
+void TessOcr::read(const char *hocrtext, PageData pageData){
     QDomDocument doc;
     doc.setContent(QString::fromUtf8(hocrtext));
 
@@ -110,7 +110,7 @@ void TessOcr::ProcessPdf(const char *hocrtext, PageData pageData){
     attrs["image"] = QString("'%1'").arg(pageData.filename);
     attrs["ppageno"] = QString::number(pageData.page);
     attrs["rot"] = QString::number(pageData.angle);
-    attrs["res"] = QString::number(300);
+    attrs["res"] = QString::number(pageData.resolution);
     pageDiv.setAttribute("title", HOCRItem::serializeAttrGroup(attrs));
     m_hocrDocument.addPage(pageDiv, true);
 }
@@ -119,8 +119,7 @@ PDFSettings &TessOcr::GetPdfSettings(){
     return m_pdfSettings;
 }
 
-int sourceDpi=300;
-void TessOcr::PrintChildren(PDFPainter& painter, const HOCRItem* item, const PDFSettings& pdfSettings, double imgScale) {
+void TessOcr::printChildren(PDFPainter& painter, const HOCRItem* item, const PDFSettings& pdfSettings, double px2pu, double imgScale){
     if(!item->isEnabled()) {
         return;
     }
@@ -130,7 +129,7 @@ void TessOcr::PrintChildren(PDFPainter& painter, const HOCRItem* item, const PDF
     if(itemClass == "ocr_par" && pdfSettings.uniformizeLineSpacing) {
         double yInc = double(itemRect.height()) / childCount;
         double y = itemRect.top() + yInc;
-        int baseline = childCount > 0 ? item->children()[0]->baseLine() : 0;
+        QPair<double, double> baseline = childCount > 0 ? item->children()[0]->baseLine() : qMakePair(0.0, 0.0);
         for(int iLine = 0; iLine < childCount; ++iLine, y += yInc) {
             HOCRItem* lineItem = item->children()[iLine];
             int x = itemRect.x();
@@ -141,105 +140,90 @@ void TessOcr::PrintChildren(PDFPainter& painter, const HOCRItem* item, const PDF
                     continue;
                 }
                 QRect wordRect = wordItem->bbox();
-                if(pdfSettings.fontFamily.isEmpty()) {
-                    painter.setFontFamily(wordItem->fontFamily(), wordItem->fontBold(), wordItem->fontItalic());
-                }
+                //tesseract bug
+                //painter.setFontFamily(pdfSettings.fontFamily.isEmpty() ? wordItem->fontFamily() : pdfSettings.fontFamily, wordItem->fontBold(), wordItem->fontItalic());
+                painter.setFontFamily(pdfSettings.fontFamily.isEmpty() ? wordItem->fontFamily() : pdfSettings.fontFamily, false, false);
                 if(pdfSettings.fontSize == -1) {
-                    double realPointSize = double(72)*wordRect.height()/sourceDpi;
-#ifdef DEBUG
-                    if(realPointSize>100){
-                        std::cerr<<"ParseXML Error"<<std::endl;
-                    }
-#endif
-                    painter.setFontSize(realPointSize * pdfSettings.detectedFontScaling);
+                    painter.setFontSize(wordItem->fontSize() * pdfSettings.detectedFontScaling);
                 }
                 // If distance from previous word is large, keep the space
-                if(wordRect.x() - prevWordRight > pdfSettings.preserveSpaceWidth * painter.getAverageCharWidth()) {
+                if(wordRect.x() - prevWordRight > pdfSettings.preserveSpaceWidth * painter.getAverageCharWidth() / px2pu) {
                     x = wordRect.x();
                 }
                 prevWordRight = wordRect.right();
                 QString text = wordItem->text();
-                painter.drawText(x, y + baseline, text);
-                x += painter.getTextWidth(text + " ");
+                double wordBaseline = (x - itemRect.x()) * baseline.first + baseline.second;
+                painter.drawText(x * px2pu, (y + wordBaseline) * px2pu, text);
+                x += painter.getTextWidth(text + " ") / px2pu;
             }
         }
     } else if(itemClass == "ocr_line" && !pdfSettings.uniformizeLineSpacing) {
-        int baseline = item->baseLine();
-        double y = itemRect.bottom() + baseline;
+        QPair<double, double> baseline = item->baseLine();
         for(int iWord = 0, nWords = item->children().size(); iWord < nWords; ++iWord) {
             HOCRItem* wordItem = item->children()[iWord];
+            if(!wordItem->isEnabled()) {
+                continue;
+            }
             QRect wordRect = wordItem->bbox();
-            if(pdfSettings.fontFamily.isEmpty()) {
-                painter.setFontFamily(wordItem->fontFamily(), wordItem->fontBold(), wordItem->fontItalic());
-            }
+            //painter.setFontFamily(pdfSettings.fontFamily.isEmpty() ? wordItem->fontFamily() : pdfSettings.fontFamily, wordItem->fontBold(), wordItem->fontItalic());
+            painter.setFontFamily(pdfSettings.fontFamily.isEmpty() ? wordItem->fontFamily() : pdfSettings.fontFamily, false, false);
             if(pdfSettings.fontSize == -1) {
-                double realPointSize = double(72)*wordRect.height()/sourceDpi;
-                painter.setFontSize(realPointSize * pdfSettings.detectedFontScaling);
+                painter.setFontSize(wordItem->fontSize() * pdfSettings.detectedFontScaling);
             }
-            painter.drawText(wordRect.x(), y, wordItem->text());
+            double y = itemRect.bottom() + (wordRect.center().x() - itemRect.x()) * baseline.first + baseline.second;
+            painter.drawText(wordRect.x() * px2pu, y * px2pu, wordItem->text());
         }
     } else if(itemClass == "ocr_graphic" && !pdfSettings.overlay) {
-        //QRect scaledItemRect(itemRect.left() * imgScale, itemRect.top() * imgScale, itemRect.width() * imgScale, itemRect.height() * imgScale);
+        /*QRect scaledItemRect(itemRect.left() * imgScale, itemRect.top() * imgScale, itemRect.width() * imgScale, itemRect.height() * imgScale);
+        QRect printRect(itemRect.left() * px2pu, itemRect.top() * px2pu, itemRect.width() * px2pu, itemRect.height() * px2pu);
         QImage selection;
-        //  QMetaObject::invokeMethod(this, "getSelection", QThread::currentThread() == qApp->thread() ? Qt::DirectConnection : Qt::BlockingQueuedConnection, Q_RETURN_ARG(QImage, selection), Q_ARG(QRect, scaledItemRect));
-        painter.drawImage(itemRect, selection, pdfSettings);
+        QMetaObject::invokeMethod(this, "getSelection", QThread::currentThread() == qApp->thread() ? Qt::DirectConnection : Qt::BlockingQueuedConnection, Q_RETURN_ARG(QImage, selection), Q_ARG(QRect, scaledItemRect));
+        painter.drawImage(printRect, selection, pdfSettings);*/
     } else {
         for(int i = 0, n = item->children().size(); i < n; ++i) {
-            PrintChildren(painter, item->children()[i], pdfSettings, imgScale);
+            printChildren(painter, item->children()[i], pdfSettings, px2pu, imgScale);
         }
     }
 }
 
 
+
+
+
 ERROR_CODE TessOcr::ExportPdf(const QString& outPath, ProgressInfo *interProcessInfo)
 {
-    QPageSize pageSize = GetPdfPageSize(&m_hocrDocument);
-    PDFSettings pdfSettings = GetPdfSettings();
-    //init printer
-    QPrinter printer;
-    printer.setOutputFormat(QPrinter::PdfFormat);
-    printer.setOutputFileName(outPath);
-    printer.setResolution(300);
-    printer.setPageSize(pageSize);
-    printer.setCreator("ZZOCR");
-    printer.setFullPage(true);
-
-    QFont defaultFont = QFont("Times");
-
+    PDFPainter* painter = nullptr;
     int pageCount = m_hocrDocument.pageCount();
-    //QPainter can`t not used through processes
-    QPainter painter(&printer);
-    painter.setRenderHint(QPainter::Antialiasing);
-    QPainterPDFPainter pdfPrinter(&painter, defaultFont);
-    if(!pdfSettings.fontFamily.isEmpty()) {
-        pdfPrinter.setFontFamily(pdfSettings.fontFamily, false, false);
-    }
-    if(pdfSettings.fontSize != -1) {
-        pdfPrinter.setFontSize(pdfSettings.fontSize);
-    }
-
+    QFont defaultFont = QFont("Source Han Sans TW");
+    defaultFont.setPointSize(0);
+    painter = new QPrinterPDFPainter(outPath, "转转OCR", defaultFont);
+    PDFSettings pdfSettings = getPdfSettings();
+    int outputDpi = 72;
+    QString paperSize = "source";
+    double pageWidth, pageHeight;
+    QString errMsg;
     for(int i = 0; i < pageCount; ++i) {
         const HOCRPage* page = m_hocrDocument.page(i);
-        if(page->isEnabled()) {
+        if(page->isEnabled()){
             QRect bbox = page->bbox();
-            sourceDpi = page->resolution();
-            if(sourceDpi == 0){
-                sourceDpi = 300;
-            }
-            int outputDpi = 300;
+            int sourceDpi = page->resolution();
+            double px2pt = (72.0 / sourceDpi);
             double imgScale = double(outputDpi) / sourceDpi;
-            PrintChildren(pdfPrinter, page, pdfSettings, imgScale);
-            if(pdfSettings.overlay){
-                QRect scaledBBox(imgScale * bbox.left(), imgScale * bbox.top(), imgScale * bbox.width(), imgScale * bbox.height());
-                QImage selection;
-                pdfPrinter.drawImage(bbox, selection, pdfSettings);
+            if(paperSize == "source") {
+                pageWidth = bbox.width() * px2pt;
+                pageHeight = bbox.height() * px2pt;
             }
-            if( i != pageCount-1)
-                printer.newPage();
+            double offsetX = 0.5 * (pageWidth - bbox.width() * px2pt);
+            double offsetY = 0.5 * (pageHeight - bbox.height() * px2pt);
+            if(!painter->createPage(pageWidth, pageHeight, offsetX, offsetY, errMsg)) {
+                return ERROR_CODE::FAIL_CREATE_PAGE;
+            }
+            printChildren(*painter, page, pdfSettings, px2pt, imgScale);
+            painter->finishPage();
         }
-        interProcessInfo->m_progress+=(10.0*(i+1)/double(pageCount));
     }
-    return ExportResult(outPath, interProcessInfo);
+    painter->finishDocument(errMsg);
+    return ERROR_CODE::SUCCESS;
 }
 
 ERROR_CODE TessOcr::ParseXML(const QString &inPath, ProgressInfo *interProcessInfo)
@@ -262,7 +246,6 @@ ERROR_CODE TessOcr::ParseXML(const QString &inPath, ProgressInfo *interProcessIn
         return ERROR_CODE::FAIL_PARSE_XML;
     }
     QDomElement pageDiv = doc.documentElement().firstChildElement("div");
-    //auto r = pageDiv.nextSiblingElement("div").isNull();
     if(pageDiv.isNull()){
         interProcessInfo->m_errCode=ERROR_CODE::NO_PAGE;
         return ERROR_CODE::NO_PAGE;
@@ -285,7 +268,7 @@ ERROR_CODE TessOcr::ParseXML(const QString &inPath, ProgressInfo *interProcessIn
 
 ERROR_CODE TessOcr::ExporteXML(const QString& outPath, ProgressInfo *interProcessInfo){
     std::ofstream ofs(outPath.toStdString());
-    ofs << m_hocrDocument.toHTML(1).toStdString();
+    ofs << m_hocrDocument.toHTML().toStdString();
     return ExportResult(outPath, interProcessInfo);
 }
 
@@ -329,51 +312,23 @@ ERROR_CODE TessOcr::CheckFileStatus(const QFileInfo &fileInfo, ProgressInfo *int
     return ERROR_CODE::SUCCESS;
 }
 
-ERROR_CODE TessOcr::Ocr(const QString &inPath, const OcrParam &pdfOcrParam, ProgressInfo *interProcessInfo){
-
-    QFileInfo fileInfo(inPath);
-    ERROR_CODE fileStatus = CheckFileStatus(fileInfo, interProcessInfo);
-    if(fileStatus !=ERROR_CODE::SUCCESS)
-        return fileStatus;
-
-    double resolution;
-    int angle =0;
-    int progress =0;
-    if(!inPath.compare("pdf", Qt::CaseInsensitive)){
-        resolution = 300;
-    }
-    else{
-        resolution = 100;
-    }
-
-    //font setting
-    m_pdfSettings.detectedFontScaling = pdfOcrParam.m_pdfPostProcess.m_fontScale/100.0;
-    m_pdfSettings.fontSize = pdfOcrParam.m_pdfPostProcess.m_fontSize;//defalut:-1;
-    m_pdfSettings.uniformizeLineSpacing = pdfOcrParam.m_pdfPostProcess.m_uniformziLineSpacing;
-    m_pdfSettings.preserveSpaceWidth = pdfOcrParam.m_pdfPostProcess.m_preserveSpaceWidth;
-
-    std::string tessdataDir = m_parentOfTessdataDir.toStdString();
-    std::string lang = pdfOcrParam.m_lang.toStdString();
-    tesseract::OcrEngineMode mode = tesseract::OcrEngineMode::OEM_LSTM_ONLY;
+ERROR_CODE TessOcr::recognize(const QString &inPath, const OcrParam &pdfOcrParam, bool autodetectLayout,  ProgressInfo *interProcessInfo) {
     tesseract::TessBaseAPI tess;
+    std::string tessdataDir = m_parentOfTessdataDir.toStdString();
+    std::string lang = "chi_sim";
+
+    tesseract::OcrEngineMode mode = tesseract::OcrEngineMode::OEM_LSTM_ONLY;
     if(tess.Init(tessdataDir.c_str(), lang.c_str(), mode)==-1){
         interProcessInfo->m_errCode=ERROR_CODE::FAIL_INIT_TESS;
         return ERROR_CODE::FAIL_INIT_TESS;
     }
-    tess.SetPageSegMode(tesseract::PSM_AUTO_ONLY);
+    tess.SetPageSegMode(tesseract::PageSegMode::PSM_SINGLE_BLOCK);
 
     ProgressMonitor monitor(pdfOcrParam.m_pages.size(), interProcessInfo);
     monitor.desc.ocr_alive =1;
     for(int page : pdfOcrParam.m_pages){
-        monitor.desc.progress = progress;
-        PageData pageData;
-        pageData.success = false;
-        pageData.filename = inPath;
-        pageData.page = page;
-        pageData.angle = angle;
-        pageData.resolution=resolution;
-        pageData.ocrAreas = GetOCRAreas(fileInfo, pageData.resolution, pageData.page);
-
+        monitor.desc.progress = 0;
+        PageData pageData = setPage(page, true, inPath);
         for(const QImage &image : pageData.ocrAreas){
             tess.SetImage(image.bits(), image.width(), image.height(), 4, image.bytesPerLine());
             tess.SetSourceResolution(pageData.resolution);
@@ -383,17 +338,17 @@ ERROR_CODE TessOcr::Ocr(const QString &inPath, const OcrParam &pdfOcrParam, Prog
                 if(m_outfileType == FILE_TYPE::TXT){
                     text = tess.GetUTF8Text();
                     m_utf8Text.append(text);
-                }
-                else{
+                } else{
                     tess.SetVariable("hocr_font_info", "true");
                     text = tess.GetHOCRText(page);
-                    ProcessPdf(text, pageData);
+                    read(text, pageData);
                 }
                 delete text;
             }
+
         }
         monitor.increaseProgress();
-        if(monitor.Cancelled()) {
+        if(monitor.Cancelled()){
             break;
         }
     }
@@ -404,4 +359,31 @@ ERROR_CODE TessOcr::Ocr(const QString &inPath, const OcrParam &pdfOcrParam, Prog
     }
     interProcessInfo->m_progress=100*0.9;
     return ERROR_CODE::SUCCESS;
+}
+
+PDFSettings TessOcr::getPdfSettings() const{
+    PDFSettings pdfSettings;
+
+    pdfSettings.colorFormat = QImage::Format::Format_Mono;
+    pdfSettings.conversionFlags = Qt::ThresholdDither;
+    pdfSettings.compression = PDFSettings::CompressJpeg ;
+    pdfSettings.compressionQuality = 94;
+    pdfSettings.fontFamily = "Source Han Sans TW";
+    pdfSettings.fontSize = -1;
+    pdfSettings.uniformizeLineSpacing = true;
+    pdfSettings.preserveSpaceWidth = 1;
+    pdfSettings.overlay = false;
+    pdfSettings.detectedFontScaling = 75 / 100.;
+    return pdfSettings;
+}
+
+PageData TessOcr::setPage(int page, bool autodetectLayout, QString filename){
+    PageData pageData;
+    pageData.success = true;
+    pageData.filename = filename;
+    pageData.angle = 0;
+    pageData.resolution = filename.endsWith(".pdf", Qt::CaseInsensitive)?300:100;
+    pageData.ocrAreas = GetOCRAreas(filename, pageData.resolution, page);
+    pageData.page = page;
+    return pageData;
 }

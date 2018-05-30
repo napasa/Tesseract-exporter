@@ -38,7 +38,8 @@ int main(int argc, char *argv[])
     switch (tessOcr.GetInfileType()) {
     case TessOcr::PDF:
     case TessOcr::IMG:
-        result = tessOcr.Ocr(inPath->c_str(), ocrParam, interProgressInfo);
+        //result = tessOcr.Ocr(inPath->c_str(), ocrParam, interProgressInfo);
+        result = tessOcr.recognize(inPath->c_str(), ocrParam, true, interProgressInfo);
         break;
     default:
         result = tessOcr.ParseXML(inPath->c_str(), interProgressInfo);
