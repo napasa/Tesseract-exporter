@@ -2,7 +2,7 @@ CMAKE_MINIMUM_REQUIRED(VERSION 2.8.11)
 SET(ENV{LC_ALL} "C")
 
 # Project propertyies
-PROJECT(TesseractExporter)
+PROJECT(ImageReader)
 
 # Definitions
 SET(CMAKE_CXX_STANDARD 11)
@@ -29,7 +29,7 @@ INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
 IF(NOT MSVC)
 IF(WIN32)
 ADD_DEFINITIONS(-DWIN32)
-INCLUDE_DIRECTORIES(/usr/i686-w64-mingw32/sys-root/mingw/include)
+INCLUDE_DIRECTORIES(/usr/x86_64-w64-mingw32/sys-root/mingw/include)
 ENDIF(WIN32)
 
 # Dependencies

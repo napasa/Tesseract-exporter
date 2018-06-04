@@ -17,7 +17,7 @@ void DisplayRenderer::adjustImage(QImage &image, int brightness, int contrast, b
 
     int nLinePixels = image.bytesPerLine() / 4;
     int nLines = image.height();
-    #pragma omp parallel for
+    //#pragma omp parallel for
     for(int line = 0; line < nLines; ++line) {
         QRgb* rgb = reinterpret_cast<QRgb*>(image.scanLine(line));
         for(int i = 0; i < nLinePixels; ++i) {
@@ -79,7 +79,7 @@ QImage PDFRenderer::render(int page, double resolution) const {
     m_mutex.lock();
     Poppler::Page* poppage = m_document->page(page - 1);
     m_mutex.unlock();
-    QImage image = poppage->renderToImage(resolution, resolution);
+    QImage image = poppage->renderToImage(resolution, resolution); 
     delete poppage;
     return image.convertToFormat(QImage::Format_RGB32);
 }

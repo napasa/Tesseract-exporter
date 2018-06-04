@@ -89,6 +89,7 @@ QList<QImage> TessOcr::GetOCRAreas(const QFileInfo &fileinfo, int resolution, in
     QPixmap pixmap = QPixmap::fromImage(image);
     QRectF rect = GetSceneBoundingRect(pixmap);
     QImage processedImage = GetImage(rect, pixmap);
+    processedImage.save("out.png");
     delete render;
     return QList<QImage>() << processedImage;
 }
@@ -195,6 +196,7 @@ ERROR_CODE TessOcr::ExportPdf(const QString& outPath, ProgressInfo *interProcess
     PDFPainter* painter = nullptr;
     int pageCount = m_hocrDocument.pageCount();
     QFont defaultFont = QFont("Source Han Sans TW");
+
     defaultFont.setPointSize(0);
     painter = new QPrinterPDFPainter(outPath, "转转OCR", defaultFont);
     PDFSettings pdfSettings = getPdfSettings();
@@ -323,7 +325,6 @@ ERROR_CODE TessOcr::recognize(const QString &inPath, const OcrParam &pdfOcrParam
         return ERROR_CODE::FAIL_INIT_TESS;
     }
     tess.SetPageSegMode(tesseract::PageSegMode::PSM_SINGLE_BLOCK);
-
     ProgressMonitor monitor(pdfOcrParam.m_pages.size(), interProcessInfo);
     monitor.desc.ocr_alive =1;
     for(int page : pdfOcrParam.m_pages){
