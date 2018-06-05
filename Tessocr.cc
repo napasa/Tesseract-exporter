@@ -89,7 +89,6 @@ QList<QImage> TessOcr::GetOCRAreas(const QFileInfo &fileinfo, int resolution, in
     QPixmap pixmap = QPixmap::fromImage(image);
     QRectF rect = GetSceneBoundingRect(pixmap);
     QImage processedImage = GetImage(rect, pixmap);
-    processedImage.save("out.png");
     delete render;
     return QList<QImage>() << processedImage;
 }
@@ -358,7 +357,7 @@ ERROR_CODE TessOcr::recognize(const QString &inPath, const OcrParam &pdfOcrParam
         interProcessInfo->m_errCode=ERROR_CODE::CANCLED_BY_USER;
         return ERROR_CODE::CANCLED_BY_USER;
     }
-    interProcessInfo->m_progress=100*0.9;
+    interProcessInfo->m_progress=100;
     return ERROR_CODE::SUCCESS;
 }
 
