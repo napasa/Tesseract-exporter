@@ -13,6 +13,7 @@
 #endif
 #include "HOCRDocument.hh"
 #include "Render.hh"
+#include "PaperSize.hh"
 
 OcrParam::OcrParam(const QString &password, const QString &lang,
                    const QList<int> &pages, const PdfPostProcess &pdfPostProcess)
@@ -119,6 +120,22 @@ PDFSettings &TessOcr::GetPdfSettings(){
     return m_pdfSettings;
 }
 
+// Unicode blocks http://www.fileformat.info/info/unicode/block/index.htm
+bool spacedWord(const QString& text, bool prevWord) {
+    short unicode = (prevWord ? text.at(text.size()-1) : text.at(0)).unicode();
+    // CJK Word
+    std::vector<std::pair<int, int>> cjkWordRange{{0x2480, 0x303f}, {0x31c0, 0x9fff}
+        , {0xf900, 0xfaff}, {0xfe30, 0xfe4f}, {0x20000, 0x2fa1f}};
+    for(int i = 0; i < cjkWordRange.size(); i++) {
+        if(unicode < cjkWordRange[i].first) {
+            return true;
+        } else if(unicode >= cjkWordRange[i].first && unicode <= cjkWordRange[i].second) {
+            return false;
+        }
+    }
+    return true;
+}
+
 void TessOcr::printChildren(PDFPainter& painter, const HOCRItem* item, const PDFSettings& pdfSettings, double px2pu, double imgScale){
     if(!item->isEnabled()) {
         return;
@@ -126,6 +143,8 @@ void TessOcr::printChildren(PDFPainter& painter, const HOCRItem* item, const PDF
     QString itemClass = item->itemClass();
     QRect itemRect = item->bbox();
     int childCount = item->children().size();
+    bool prevSpacedWord, currentSpacedWord;
+    prevSpacedWord = currentSpacedWord = false;
     if(itemClass == "ocr_par" && pdfSettings.uniformizeLineSpacing) {
         double yInc = double(itemRect.height()) / childCount;
         double y = itemRect.top() + yInc;
@@ -140,21 +159,28 @@ void TessOcr::printChildren(PDFPainter& painter, const HOCRItem* item, const PDF
                     continue;
                 }
                 QRect wordRect = wordItem->bbox();
-                //tesseract bug
-                //painter.setFontFamily(pdfSettings.fontFamily.isEmpty() ? wordItem->fontFamily() : pdfSettings.fontFamily, wordItem->fontBold(), wordItem->fontItalic());
                 painter.setFontFamily(pdfSettings.fontFamily.isEmpty() ? wordItem->fontFamily() : pdfSettings.fontFamily, false, false);
                 if(pdfSettings.fontSize == -1) {
                     painter.setFontSize(wordItem->fontSize() * pdfSettings.detectedFontScaling);
                 }
+
+                prevWordRight = wordRect.right();
+                QString text = wordItem->text();
+                currentSpacedWord = spacedWord(text, false);
                 // If distance from previous word is large, keep the space
                 if(wordRect.x() - prevWordRight > pdfSettings.preserveSpaceWidth * painter.getAverageCharWidth() / px2pu) {
                     x = wordRect.x();
+                } else {
+                    //need space
+                    if(currentSpacedWord && prevSpacedWord ) {
+                        x += painter.getTextWidth(" ") / px2pu;
+                    }
                 }
-                prevWordRight = wordRect.right();
-                QString text = wordItem->text();
+
                 double wordBaseline = (x - itemRect.x()) * baseline.first + baseline.second;
                 painter.drawText(x * px2pu, (y + wordBaseline) * px2pu, text);
-                x += painter.getTextWidth(text + " ") / px2pu;
+                x += painter.getTextWidth(text) / px2pu;
+                prevSpacedWord = spacedWord(text, true);
             }
         }
     } else if(itemClass == "ocr_line" && !pdfSettings.uniformizeLineSpacing) {
@@ -198,19 +224,39 @@ ERROR_CODE TessOcr::ExportPdf(const QString& outPath, ProgressInfo *interProcess
 
     defaultFont.setPointSize(0);
     painter = new QPrinterPDFPainter(outPath, "转转OCR", defaultFont);
+
     PDFSettings pdfSettings = getPdfSettings();
-    int outputDpi = 72;
-    QString paperSize = "source";
+    int outputDpi = 100;
+
+    QString paperSize = m_infileType == FILE_TYPE::PDF ? "source" : "A4";
     double pageWidth, pageHeight;
+
+    if(paperSize != "source"){
+        auto inchSize = PaperSize::getSize(PaperSize::inch, paperSize.toStdString(), false);
+        pageWidth = inchSize.width * 72.0;
+        pageHeight = inchSize.height * 72.0;
+    }
+
     QString errMsg;
     for(int i = 0; i < pageCount; ++i) {
         const HOCRPage* page = m_hocrDocument.page(i);
         if(page->isEnabled()){
+
             QRect bbox = page->bbox();
             int sourceDpi = page->resolution();
-            double px2pt = (72.0 / sourceDpi);
+
+            double sourceSizeToOutSize;
+
+            if( paperSize != "source") {
+                sourceSizeToOutSize = pageWidth / (72.0 / sourceDpi * bbox.width());
+            } else {
+                sourceSizeToOutSize = 1;
+            }
+            painter->setFontSize(30, true);
+            double px2pt = (72.0 / sourceDpi)* sourceSizeToOutSize;;
             double imgScale = double(outputDpi) / sourceDpi;
-            if(paperSize == "source") {
+            pdfSettings.detectedFontScaling *= sourceSizeToOutSize;
+            if(paperSize == "source"){
                 pageWidth = bbox.width() * px2pt;
                 pageHeight = bbox.height() * px2pt;
             }
@@ -224,7 +270,7 @@ ERROR_CODE TessOcr::ExportPdf(const QString& outPath, ProgressInfo *interProcess
         }
     }
     painter->finishDocument(errMsg);
-    return ERROR_CODE::SUCCESS;
+    return ExportResult(outPath, interProcessInfo);
 }
 
 ERROR_CODE TessOcr::ParseXML(const QString &inPath, ProgressInfo *interProcessInfo)
@@ -281,7 +327,8 @@ ERROR_CODE TessOcr::ExportTxt(const QString& outPath, ProgressInfo *interProcess
 
 ERROR_CODE TessOcr::ExportResult(const QString& outPath, ProgressInfo *interProgressInfo){
     interProgressInfo->m_progress=100;
-    return QFileInfo(outPath).exists()?ERROR_CODE::SUCCESS:ERROR_CODE::NOT_EXIST_FILE;
+    interProgressInfo->m_errCode = QFileInfo(outPath).exists()?ERROR_CODE::SUCCESS:ERROR_CODE::NOT_EXIST_FILE;
+    return interProgressInfo->m_errCode;
 }
 
 ERROR_CODE TessOcr::CheckFileStatus(const QFileInfo &fileInfo, ProgressInfo *interProcessInfo, const OcrParam &pdfOcrParam){
@@ -357,7 +404,7 @@ ERROR_CODE TessOcr::recognize(const QString &inPath, const OcrParam &pdfOcrParam
         interProcessInfo->m_errCode=ERROR_CODE::CANCLED_BY_USER;
         return ERROR_CODE::CANCLED_BY_USER;
     }
-    interProcessInfo->m_progress=100;
+    interProcessInfo->m_progress=90;
     return ERROR_CODE::SUCCESS;
 }
 

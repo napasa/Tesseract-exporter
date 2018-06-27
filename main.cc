@@ -54,6 +54,7 @@ int main(int argc, char *argv[])
         default:
             return tessOcr.ExportTxt(outPath->c_str(), interProgressInfo);
         }
+
     }
     else{
         return result;

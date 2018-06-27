@@ -17,7 +17,7 @@ void DisplayRenderer::adjustImage(QImage &image, int brightness, int contrast, b
 
     int nLinePixels = image.bytesPerLine() / 4;
     int nLines = image.height();
-    //#pragma omp parallel for
+    #pragma omp parallel for
     for(int line = 0; line < nLines; ++line) {
         QRgb* rgb = reinterpret_cast<QRgb*>(image.scanLine(line));
         for(int i = 0; i < nLinePixels; ++i) {

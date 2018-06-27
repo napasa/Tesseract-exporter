@@ -96,14 +96,15 @@ public:
             std::this_thread::sleep_for(std::chrono::seconds(m_sencods));
             ResultCallback(m_inPath->c_str(), m_outPath->c_str(), m_progressInfo);
         } while (m_progressInfo->m_progress != 100 && m_progressInfo->m_errCode == ERROR_CODE::PROCESSING_FILE);
-#ifdef DEBUG
+
         if(m_progressInfo->m_progress==100){
             std::cerr<<"OCR ended by success. OutPath is "<<m_outPath->c_str()<<std::endl;
         }
         else{
             std::cerr<< "OCR ended by error code which is "<<m_progressInfo->m_errCode<<std::endl;
         }
-#endif
+        std::cerr<<"OCR end errCode value is " << m_progressInfo->m_errCode;
+
         return m_progressInfo->m_errCode;
     }
     void StopTess(){

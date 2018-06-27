@@ -27,7 +27,7 @@ struct PDFSettings {
 class PDFPainter {
 public:
     virtual void setFontFamily(const QString& family, bool bold, bool italic) = 0;
-    virtual void setFontSize(double pointSize) = 0;
+    virtual void setFontSize(double pointSize, bool defaultFont = false) = 0;
     virtual void drawText(double x, double y, const QString& text) = 0;
     virtual void drawImage(const QRect& bbox, const QImage& image, const PDFSettings& settings) = 0;
     virtual double getAverageCharWidth() const = 0;
@@ -79,10 +79,16 @@ public:
         m_curFont.setItalic(italic);
         m_painter->setFont(m_curFont);
     }
-    void setFontSize(double pointSize) override {
-        if(pointSize != m_curFont.pointSize()) {
-            m_curFont.setPointSize(pointSize);
-            m_painter->setFont(m_curFont);
+    void setFontSize(double pointSize, bool defaultFont) override {
+        if(defaultFont) {
+            if(pointSize != m_defaultFont.pointSize()) {
+                m_defaultFont.setPointSize(pointSize);
+            }
+        } else {
+            if(pointSize != m_curFont.pointSize()) {
+                m_curFont.setPointSize(pointSize);
+                m_painter->setFont(m_curFont);
+            }
         }
     }
     void drawText(double x, double y, const QString& text) override {
