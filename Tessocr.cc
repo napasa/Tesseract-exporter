@@ -15,9 +15,9 @@
 #include "Render.hh"
 #include "PaperSize.hh"
 
-OcrParam::OcrParam(const QString &password, const QString &lang,
-                   const QList<int> &pages, const PdfPostProcess &pdfPostProcess)
-    :m_password(password), m_lang(lang), m_pages(pages), m_pdfPostProcess(pdfPostProcess){
+OcrParam::OcrParam(const QString& password, const QString& lang,
+                   const QList<int>& pages, const PdfPostProcess& pdfPostProcess)
+    : m_password(password), m_lang(lang), m_pages(pages), m_pdfPostProcess(pdfPostProcess) {
 }
 
 struct ReadSessionData {
@@ -31,7 +31,7 @@ struct ReadSessionData {
 };
 
 
-QRectF GetSceneBoundingRect(QPixmap pixmap){
+QRectF GetSceneBoundingRect(QPixmap pixmap) {
     // We cannot use m_imageItem->sceneBoundingRect() since its pixmap
     // can currently be downscaled and therefore have slightly different
     // proportions.
@@ -43,8 +43,8 @@ QRectF GetSceneBoundingRect(QPixmap pixmap){
     return transform.mapRect(rect);
 }
 
-TessOcr::TessOcr(const QString &parentOfTessdataDir)
-    :m_parentOfTessdataDir(parentOfTessdataDir){
+TessOcr::TessOcr(const QString& parentOfTessdataDir)
+    : m_parentOfTessdataDir(parentOfTessdataDir) {
 
 
     //complete tess data dir
@@ -58,7 +58,7 @@ TessOcr::TessOcr(const QString &parentOfTessdataDir)
     pdfSettings.uniformizeLineSpacing = true;
     pdfSettings.preserveSpaceWidth = 1;
     pdfSettings.overlay = false;
-    pdfSettings.detectedFontScaling = 100/ 100.;
+    pdfSettings.detectedFontScaling = 100 / 100.;
     m_pdfSettings = pdfSettings;
 }
 
@@ -77,13 +77,12 @@ QImage GetImage(const QRectF& rect, QPixmap pixmap) {
     return image;
 }
 
-QList<QImage> TessOcr::GetOCRAreas(const QFileInfo &fileinfo, int resolution, int page) {
+QList<QImage> TessOcr::GetOCRAreas(const QFileInfo& fileinfo, int resolution, int page) {
 
-    DisplayRenderer *render=nullptr;
-    if(fileinfo.completeSuffix().toLower().compare("pdf")==0){
-        render = new PDFRenderer(fileinfo.filePath(),"");
-    }
-    else{
+    DisplayRenderer* render = nullptr;
+    if(fileinfo.completeSuffix().toLower().compare("pdf") == 0) {
+        render = new PDFRenderer(fileinfo.filePath(), "");
+    } else {
         render = new ImageRenderer(fileinfo.filePath());
     }
     QImage image = render->render(page, resolution);
@@ -94,15 +93,15 @@ QList<QImage> TessOcr::GetOCRAreas(const QFileInfo &fileinfo, int resolution, in
     return QList<QImage>() << processedImage;
 }
 
-QPageSize TessOcr::GetPdfPageSize(const HOCRDocument*hocrdocument){
+QPageSize TessOcr::GetPdfPageSize(const HOCRDocument* hocrdocument) {
     double pageWidth, pageHeight;
     const HOCRPage* page = hocrdocument->page(0);
-    pageWidth = double(page->bbox().width())/page->resolution()*72;
-    pageHeight = double(page->bbox().height())/page->resolution()*72;
-    return QPageSize(QSize(pageWidth, pageHeight), "custom",QPageSize::ExactMatch);
+    pageWidth = double(page->bbox().width()) / page->resolution() * 72;
+    pageHeight = double(page->bbox().height()) / page->resolution() * 72;
+    return QPageSize(QSize(pageWidth, pageHeight), "custom", QPageSize::ExactMatch);
 }
 
-void TessOcr::read(const char *hocrtext, PageData pageData){
+void TessOcr::read(const char* hocrtext, PageData pageData) {
     QDomDocument doc;
     doc.setContent(QString::fromUtf8(hocrtext));
 
@@ -116,13 +115,13 @@ void TessOcr::read(const char *hocrtext, PageData pageData){
     m_hocrDocument.addPage(pageDiv, true);
 }
 
-PDFSettings &TessOcr::GetPdfSettings(){
+PDFSettings& TessOcr::GetPdfSettings() {
     return m_pdfSettings;
 }
 
 // Unicode blocks http://www.fileformat.info/info/unicode/block/index.htm
 bool spacedWord(const QString& text, bool prevWord) {
-    short unicode = (prevWord ? text.at(text.size()-1) : text.at(0)).unicode();
+    short unicode = (prevWord ? text.at(text.size() - 1) : text.at(0)).unicode();
     // CJK Word
     std::vector<std::pair<int, int>> cjkWordRange{{0x2480, 0x303f}, {0x31c0, 0x9fff}
         , {0xf900, 0xfaff}, {0xfe30, 0xfe4f}, {0x20000, 0x2fa1f}};
@@ -136,7 +135,7 @@ bool spacedWord(const QString& text, bool prevWord) {
     return true;
 }
 
-void TessOcr::printChildren(PDFPainter& painter, const HOCRItem* item, const PDFSettings& pdfSettings, double px2pu, double imgScale){
+void TessOcr::printChildren(PDFPainter& painter, const HOCRItem* item, const PDFSettings& pdfSettings, double px2pu, double imgScale) {
     if(!item->isEnabled()) {
         return;
     }
@@ -216,8 +215,7 @@ void TessOcr::printChildren(PDFPainter& painter, const HOCRItem* item, const PDF
 
 
 
-ERROR_CODE TessOcr::ExportPdf(const QString& outPath, ProgressInfo *interProcessInfo)
-{
+ERROR_CODE TessOcr::ExportPdf(const QString& outPath, ProgressInfo* interProcessInfo) {
     PDFPainter* painter = nullptr;
     int pageCount = m_hocrDocument.pageCount();
     QFont defaultFont = QFont("Source Han Sans TW");
@@ -231,7 +229,7 @@ ERROR_CODE TessOcr::ExportPdf(const QString& outPath, ProgressInfo *interProcess
     QString paperSize = m_infileType == FILE_TYPE::PDF ? "source" : "A4";
     double pageWidth, pageHeight;
 
-    if(paperSize != "source"){
+    if(paperSize != "source") {
         auto inchSize = PaperSize::getSize(PaperSize::inch, paperSize.toStdString(), false);
         pageWidth = inchSize.width * 72.0;
         pageHeight = inchSize.height * 72.0;
@@ -240,7 +238,7 @@ ERROR_CODE TessOcr::ExportPdf(const QString& outPath, ProgressInfo *interProcess
     QString errMsg;
     for(int i = 0; i < pageCount; ++i) {
         const HOCRPage* page = m_hocrDocument.page(i);
-        if(page->isEnabled()){
+        if(page->isEnabled()) {
 
             QRect bbox = page->bbox();
             int sourceDpi = page->resolution();
@@ -253,10 +251,10 @@ ERROR_CODE TessOcr::ExportPdf(const QString& outPath, ProgressInfo *interProcess
                 sourceSizeToOutSize = 1;
             }
             painter->setFontSize(30, true);
-            double px2pt = (72.0 / sourceDpi)* sourceSizeToOutSize;;
+            double px2pt = (72.0 / sourceDpi) * sourceSizeToOutSize;;
             double imgScale = double(outputDpi) / sourceDpi;
             pdfSettings.detectedFontScaling *= sourceSizeToOutSize;
-            if(paperSize == "source"){
+            if(paperSize == "source") {
                 pageWidth = bbox.width() * px2pt;
                 pageHeight = bbox.height() * px2pt;
             }
@@ -273,28 +271,28 @@ ERROR_CODE TessOcr::ExportPdf(const QString& outPath, ProgressInfo *interProcess
     return ExportResult(outPath, interProcessInfo);
 }
 
-ERROR_CODE TessOcr::ParseXML(const QString &inPath, ProgressInfo *interProcessInfo)
-{
+ERROR_CODE TessOcr::ParseXML(const QString& inPath, ProgressInfo* interProcessInfo) {
     QFile file(inPath);
     ERROR_CODE fileStatus = CheckFileStatus(file, interProcessInfo);
-    if(fileStatus !=ERROR_CODE::SUCCESS)
+    if(fileStatus != ERROR_CODE::SUCCESS) {
         return fileStatus;
-    if(!file.open(QIODevice::ReadOnly)){
+    }
+    if(!file.open(QIODevice::ReadOnly)) {
         interProcessInfo->m_errCode = ERROR_CODE::NOT_EXIST_FILE;
         return ERROR_CODE::NOT_EXIST_FILE;
     }
     QTextStream ts(&file);
-    QString xmlString=ts.readAll();
+    QString xmlString = ts.readAll();
     file.close();
 
     QDomDocument doc;
-    if(!doc.setContent(xmlString)){
-        interProcessInfo->m_errCode=ERROR_CODE::FAIL_PARSE_XML;
+    if(!doc.setContent(xmlString)) {
+        interProcessInfo->m_errCode = ERROR_CODE::FAIL_PARSE_XML;
         return ERROR_CODE::FAIL_PARSE_XML;
     }
     QDomElement pageDiv = doc.documentElement().firstChildElement("div");
-    if(pageDiv.isNull()){
-        interProcessInfo->m_errCode=ERROR_CODE::NO_PAGE;
+    if(pageDiv.isNull()) {
+        interProcessInfo->m_errCode = ERROR_CODE::NO_PAGE;
         return ERROR_CODE::NO_PAGE;
     }
 
@@ -313,79 +311,77 @@ ERROR_CODE TessOcr::ParseXML(const QString &inPath, ProgressInfo *interProcessIn
     return ERROR_CODE::SUCCESS;
 }
 
-ERROR_CODE TessOcr::ExporteXML(const QString& outPath, ProgressInfo *interProcessInfo){
+ERROR_CODE TessOcr::ExporteXML(const QString& outPath, ProgressInfo* interProcessInfo) {
     std::ofstream ofs(outPath.toStdString());
     ofs << m_hocrDocument.toHTML().toStdString();
     return ExportResult(outPath, interProcessInfo);
 }
 
-ERROR_CODE TessOcr::ExportTxt(const QString& outPath, ProgressInfo *interProcessInfo){
+ERROR_CODE TessOcr::ExportTxt(const QString& outPath, ProgressInfo* interProcessInfo) {
     std::ofstream ofs(outPath.toStdString());
-    ofs<<m_utf8Text.toStdString();
+    ofs << m_utf8Text.toStdString();
     return ExportResult(outPath, interProcessInfo);
 }
 
-ERROR_CODE TessOcr::ExportResult(const QString& outPath, ProgressInfo *interProgressInfo){
-    interProgressInfo->m_progress=100;
-    interProgressInfo->m_errCode = QFileInfo(outPath).exists()?ERROR_CODE::SUCCESS:ERROR_CODE::NOT_EXIST_FILE;
+ERROR_CODE TessOcr::ExportResult(const QString& outPath, ProgressInfo* interProgressInfo) {
+    interProgressInfo->m_progress = 100;
+    interProgressInfo->m_errCode = QFileInfo(outPath).exists() ? ERROR_CODE::SUCCESS : ERROR_CODE::NOT_EXIST_FILE;
     return interProgressInfo->m_errCode;
 }
 
-ERROR_CODE TessOcr::CheckFileStatus(const QFileInfo &fileInfo, ProgressInfo *interProcessInfo, const OcrParam &pdfOcrParam){
-    if(!fileInfo.exists()){
-        interProcessInfo->m_errCode=ERROR_CODE::NOT_EXIST_FILE;
+ERROR_CODE TessOcr::CheckFileStatus(const QFileInfo& fileInfo, ProgressInfo* interProcessInfo, const OcrParam& pdfOcrParam) {
+    if(!fileInfo.exists()) {
+        interProcessInfo->m_errCode = ERROR_CODE::NOT_EXIST_FILE;
         return ERROR_CODE::NOT_EXIST_FILE;
-    }
-    else if(!fileInfo.isFile()){
-        interProcessInfo->m_errCode=ERROR_CODE::NOT_FILE;
+    } else if(!fileInfo.isFile()) {
+        interProcessInfo->m_errCode = ERROR_CODE::NOT_FILE;
         return ERROR_CODE::NOT_FILE;
     }
 
     // extra checking for pdf
-    if(fileInfo.completeSuffix().toLower().compare("pdf")){
+    if(fileInfo.completeSuffix().toLower().compare("pdf")) {
         return ERROR_CODE::SUCCESS;
     }
 
-    Poppler::Document* document=Poppler::Document::load(fileInfo.absoluteFilePath());;
-    if(!document){
-        interProcessInfo->m_errCode=ERROR_CODE::NOT_LOAD_FILE;//cant not load file
+    Poppler::Document* document = Poppler::Document::load(fileInfo.absoluteFilePath());;
+    if(!document) {
+        interProcessInfo->m_errCode = ERROR_CODE::NOT_LOAD_FILE; //cant not load file
         return ERROR_CODE::NOT_LOAD_FILE;
-    }
-    else if(document->isLocked() &&
-            !document->unlock(pdfOcrParam.m_password.toLocal8Bit(), pdfOcrParam.m_password.toLocal8Bit())){
-        interProcessInfo->m_errCode=ERROR_CODE::LOCKED_FILE;//can not unlock
+    } else if(document->isLocked() &&
+              !document->unlock(pdfOcrParam.m_password.toLocal8Bit(), pdfOcrParam.m_password.toLocal8Bit())) {
+        interProcessInfo->m_errCode = ERROR_CODE::LOCKED_FILE; //can not unlock
         return ERROR_CODE::LOCKED_FILE;
     }
     delete document;
     return ERROR_CODE::SUCCESS;
 }
 
-ERROR_CODE TessOcr::recognize(const QString &inPath, const OcrParam &pdfOcrParam, bool autodetectLayout,  ProgressInfo *interProcessInfo) {
+ERROR_CODE TessOcr::recognize(const QString& inPath, const OcrParam& pdfOcrParam, bool autodetectLayout,  ProgressInfo* interProcessInfo) {
     tesseract::TessBaseAPI tess;
     std::string tessdataDir = m_parentOfTessdataDir.toStdString();
     std::string lang = "chi_sim";
 
     tesseract::OcrEngineMode mode = tesseract::OcrEngineMode::OEM_LSTM_ONLY;
-    if(tess.Init(tessdataDir.c_str(), lang.c_str(), mode)==-1){
-        interProcessInfo->m_errCode=ERROR_CODE::FAIL_INIT_TESS;
+    if(tess.Init(tessdataDir.c_str(), lang.c_str(), mode) == -1) {
+        interProcessInfo->m_errCode = ERROR_CODE::FAIL_INIT_TESS;
         return ERROR_CODE::FAIL_INIT_TESS;
     }
     tess.SetPageSegMode(tesseract::PageSegMode::PSM_SINGLE_BLOCK);
     ProgressMonitor monitor(pdfOcrParam.m_pages.size(), interProcessInfo);
-    monitor.desc.ocr_alive =1;
-    for(int page : pdfOcrParam.m_pages){
+    monitor.desc.ocr_alive = 1;
+    for(int page : pdfOcrParam.m_pages) {
         monitor.desc.progress = 0;
         PageData pageData = setPage(page, true, inPath);
-        for(const QImage &image : pageData.ocrAreas){
+        for(const QImage& image : pageData.ocrAreas) {
             tess.SetImage(image.bits(), image.width(), image.height(), 4, image.bytesPerLine());
             tess.SetSourceResolution(pageData.resolution);
             tess.Recognize(&monitor.desc);
-            if(!monitor.Cancelled()){
-                char *text=nullptr;
-                if(m_outfileType == FILE_TYPE::TXT){
+            if(!monitor.Cancelled()) {
+                char* text = nullptr;
+                if(m_outfileType == FILE_TYPE::TXT) {
                     text = tess.GetUTF8Text();
                     m_utf8Text.append(text);
-                } else{
+                } else {
                     tess.SetVariable("hocr_font_info", "true");
                     text = tess.GetHOCRText(page);
                     read(text, pageData);
@@ -395,20 +391,19 @@ ERROR_CODE TessOcr::recognize(const QString &inPath, const OcrParam &pdfOcrParam
 
         }
         monitor.increaseProgress();
-        if(monitor.Cancelled()){
+        if(monitor.Cancelled()) {
             break;
         }
     }
-    if(monitor.Cancelled()== true)
-    {
-        interProcessInfo->m_errCode=ERROR_CODE::CANCLED_BY_USER;
+    if(monitor.Cancelled() == true) {
+        interProcessInfo->m_errCode = ERROR_CODE::CANCLED_BY_USER;
         return ERROR_CODE::CANCLED_BY_USER;
     }
-    interProcessInfo->m_progress=90;
+    interProcessInfo->m_progress = 90;
     return ERROR_CODE::SUCCESS;
 }
 
-PDFSettings TessOcr::getPdfSettings() const{
+PDFSettings TessOcr::getPdfSettings() const {
     PDFSettings pdfSettings;
 
     pdfSettings.colorFormat = QImage::Format::Format_Mono;
@@ -424,12 +419,12 @@ PDFSettings TessOcr::getPdfSettings() const{
     return pdfSettings;
 }
 
-PageData TessOcr::setPage(int page, bool autodetectLayout, QString filename){
+PageData TessOcr::setPage(int page, bool autodetectLayout, QString filename) {
     PageData pageData;
     pageData.success = true;
     pageData.filename = filename;
     pageData.angle = 0;
-    pageData.resolution = filename.endsWith(".pdf", Qt::CaseInsensitive)?300:100;
+    pageData.resolution = filename.endsWith(".pdf", Qt::CaseInsensitive) ? 300 : 100;
     pageData.ocrAreas = GetOCRAreas(filename, pageData.resolution, page);
     pageData.page = page;
     return pageData;

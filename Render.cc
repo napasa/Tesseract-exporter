@@ -4,7 +4,7 @@
 #include <cmath>
 #include "Render.hh"
 
-void DisplayRenderer::adjustImage(QImage &image, int brightness, int contrast, bool invert) const {
+void DisplayRenderer::adjustImage(QImage& image, int brightness, int contrast, bool invert) const {
     if(brightness == 0 && contrast == 0 && !invert) {
         return;
     }
@@ -44,7 +44,7 @@ void DisplayRenderer::adjustImage(QImage &image, int brightness, int contrast, b
     }
 }
 
-ImageRenderer::ImageRenderer(const QString &filename) : DisplayRenderer(filename) {
+ImageRenderer::ImageRenderer(const QString& filename) : DisplayRenderer(filename) {
     m_pageCount = QImageReader(m_filename).imageCount();
 }
 
@@ -79,7 +79,7 @@ QImage PDFRenderer::render(int page, double resolution) const {
     m_mutex.lock();
     Poppler::Page* poppage = m_document->page(page - 1);
     m_mutex.unlock();
-    QImage image = poppage->renderToImage(resolution, resolution); 
+    QImage image = poppage->renderToImage(resolution, resolution);
     delete poppage;
     return image.convertToFormat(QImage::Format_RGB32);
 }

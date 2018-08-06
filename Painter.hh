@@ -34,7 +34,7 @@ public:
     virtual double getTextWidth(const QString& text) const = 0;
     virtual bool createPage(double /*width*/, double /*height*/, double /*offsetX*/, double /*offsetY*/, QString& /*errMsg*/) { return true; }
     virtual void finishPage() {}
-    virtual bool finishDocument(QString& /*errMsg*/){ return true; }
+    virtual bool finishDocument(QString& /*errMsg*/) { return true; }
 protected:
 #if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
     QVector<QRgb> createGray8Table() const {

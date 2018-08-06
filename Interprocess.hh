@@ -7,27 +7,27 @@
 #include <boost/interprocess/allocators/allocator.hpp>
 
 using namespace boost::interprocess;
-enum ERROR_CODE{
-   PROCESSING_FILE=0,
-   SUCCESS,
-   UNIMPLEMENTED,
-   NOT_EXIST_FILE,
-   NOT_FILE,
-   NOT_LOAD_FILE,
-   LOCKED_FILE,
-   FAIL_INIT_TESS,
-   CANCLED_BY_USER,
-   FAIL_OPEN_FILE,
-   NO_PAGE,
-   FAIL_PARSE_XML,
-   FAIL_FIND_SHARE_MEMORY,
-   CANT_NOT_GENERATE_IMAGE,
-   FAIL_CREATE_PAGE
+enum ERROR_CODE {
+    PROCESSING_FILE = 0,
+    SUCCESS,
+    UNIMPLEMENTED,
+    NOT_EXIST_FILE,
+    NOT_FILE,
+    NOT_LOAD_FILE,
+    LOCKED_FILE,
+    FAIL_INIT_TESS,
+    CANCLED_BY_USER,
+    FAIL_OPEN_FILE,
+    NO_PAGE,
+    FAIL_PARSE_XML,
+    FAIL_FIND_SHARE_MEMORY,
+    CANT_NOT_GENERATE_IMAGE,
+    FAIL_CREATE_PAGE
 };
-struct ProgressInfo{
+struct ProgressInfo {
 public:
     ProgressInfo(int progress)
-        :m_progress(progress), m_errCode(ERROR_CODE::PROCESSING_FILE){}
+        : m_progress(progress), m_errCode(ERROR_CODE::PROCESSING_FILE) {}
     int m_progress;
     ERROR_CODE m_errCode;
 };
@@ -36,12 +36,12 @@ public:
 typedef allocator<char, managed_shared_memory::segment_manager>  ShmemAllocator;
 typedef basic_string<char, std::char_traits<char>, ShmemAllocator> MyString;
 typedef std::pair<int, int> PageRange;
-struct PdfPostProcess{
+struct PdfPostProcess {
 public:
-    PdfPostProcess(){}
+    PdfPostProcess() {}
     PdfPostProcess(int fontScale, int fontSize, bool uniformziLineSpacing, int preserveSpaceWidth)
         : m_fontScale(fontScale), m_fontSize(fontSize), m_uniformziLineSpacing(uniformziLineSpacing)
-    ,m_preserveSpaceWidth(preserveSpaceWidth){
+        , m_preserveSpaceWidth(preserveSpaceWidth) {
 
     }
     int m_fontScale;/*0~100*/
